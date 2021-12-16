@@ -6,6 +6,64 @@ import json
 #   packet['header_len']
 #   packet['data_len']
 
+def sum_operation(packet):
+    value = 0
+    for subpacket in packet['subpackets']:
+        value += subpacket['data']
+    return value
+
+
+def product_operation(packet):
+    value = 1
+    for subpacket in packet['subpackets']:
+        value *= subpacket['data']
+    return value
+
+
+def min_operation(packet):
+    values = []
+    for subpacket in packet['subpackets']:
+        values.append(subpacket['data'])
+    return min(values)
+
+
+def max_operation(packet):
+    values = []
+    for subpacket in packet['subpackets']:
+        values.append(subpacket['data'])
+    return max(values)
+
+
+def gt_operation(packet):
+    value = 0
+    if packet['subpackets'][0]['data'] > packet['subpackets'][1]['data']:
+        value = 1
+    return value
+
+
+def lt_operation(packet):
+    value = 0
+    if packet['subpackets'][0]['data'] < packet['subpackets'][1]['data']:
+        value = 1
+    return value
+
+
+def eq_operation(packet):
+    value = 0
+    if packet['subpackets'][0]['data'] == packet['subpackets'][1]['data']:
+        value = 1
+    return value
+
+
+OPERATIONS = {
+    0: sum_operation,
+    1: product_operation,
+    2: min_operation,
+    3: max_operation,
+    5: gt_operation,
+    6: lt_operation,
+    7: eq_operation,
+}
 
 BASE_HEADER_LEN = 6
 SUBPACKET_LEN = 0
@@ -53,31 +111,21 @@ def read_literal_value():
 def extract_subpackets(packet):
     global DATA_STREAM
     packet['subpackets'] = []
+    packet['data_len'] = 0
 
     if packet['length_type_id'] == SUBPACKET_LEN: # next 15 bits are the len of the subpacket
-        subpacket_len = read_n_bits(15) # TODO: we currently don't use the len
-        while subpacket_len > 0 and len(DATA_STREAM) > MIN_PKT_SIZE:
+        packet['header_len'] += 15
+        subpacket_len = read_n_bits(15)
+        while subpacket_len > 0 and int(DATA_STREAM[:subpacket_len], 2) != 0:
             subpacket = extract_packet()
             packet['subpackets'].append(subpacket)
             subpacket_len -= subpacket['total_len']
 
     elif packet['length_type_id'] == NUM_OF_SUBPACKETS:
+        packet['header_len'] += 11
         n_subpackets = read_n_bits(11) # next 11 bits are the number of subpackets
         for _ in range(n_subpackets):
             packet['subpackets'].append(extract_packet())
-
-    return packet
-
-
-def extract_data(packet):
-    packet['data_len'] = 0
-
-    if packet['type_id'] == 4:
-        assert packet['length_type_id'] == -1
-        packet['data_len'], packet['data'] = read_literal_value()
-        return packet
-
-    # IS OPERATION
 
     # calculate data_len
     for subpacket in packet['subpackets']:
@@ -86,16 +134,21 @@ def extract_data(packet):
     return packet
 
 
-def ignore_padding(packet):
-    global DATA_STREAM
-    packet_len = packet['header_len'] + packet['data_len']
-    padding = 4 - packet_len % 4
+def extract_data(packet):
+    if packet['type_id'] == 4:
+        assert packet['length_type_id'] == -1
+        packet['data_len'], packet['data'] = read_literal_value()
+        return packet
 
-    read_n_bits(padding)
+    # IS OPERATION
+    operation = packet['type_id']
+    assert len(packet['subpackets']) > 0
+    assert packet['length_type_id'] != -1
+    assert 'data' not in packet
+    packet['data'] = OPERATIONS[operation](packet)
 
-    # packet['total_len'] = raw_packet_len + padding
-    # print(DATA_STREAM[total_packet_len:], ' | ', DATA_STREAM[:total_packet_len])
-    # return packet
+    return packet
+
 
 def extract_packet():
     packet = {}
@@ -104,7 +157,7 @@ def extract_packet():
     packet = extract_data(packet)
     packet['total_len'] = packet['header_len'] + packet['data_len']
 
-    # print(json.dumps(packet, indent=4))
+    print(json.dumps(packet, indent=4))
     return packet
 
 
@@ -115,7 +168,6 @@ def extract_packets():
         packet = extract_packet()
         packets.append(packet)
 
-    ignore_padding(packets[-1])
     return packets
 
 
@@ -126,20 +178,10 @@ def hex_to_stream(hex_data):
     return data_stream
 
 
-def sum_versions(packet):
-    s = packet['version']
-    for subpacket in packet['subpackets']:
-        s += sum_versions(subpacket)
-    return s
+while hex_data := input():
+    DATA_STREAM = hex_to_stream(hex_data) # trim leading '0b'
+    packets = extract_packets()
 
-
-hex_data = input()
-DATA_STREAM = hex_to_stream(hex_data) # trim leading '0b'
-packets = extract_packets()
-
-sum_v = 0
-for packet in packets:
-    print(json.dumps(packet, indent=4))
-    sum_v += sum_versions(packet)
-print(sum_v)
+    # print(json.dumps(packets[0], indent=4))
+    # print(packets[0]['data'])
 
