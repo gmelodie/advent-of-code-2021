@@ -89,6 +89,7 @@ class SnailNumber():
                                 value=math.ceil(self.value/2))
         self.value = None
 
+<<<<<<< HEAD
     def reduce_once(self):
         global root
         # print(f'reducing {self} (val: {self.value}, left: {self.left}, right: {self.right})')
@@ -118,6 +119,50 @@ class SnailNumber():
             self.split()
             print(f'after split: {root}')
             return True
+=======
+    def explode_once(self):
+        if self.value is not None: # first we reduce children
+            return False
+        assert self.left is not None
+        assert self.right is not None
+        if self.nesting_level >= 4 and self.left.value != None and self.right.value != None:
+            self.explode()
+            print(f'after explode: {root}')
+            return True
+
+        stop = self.left.explode_once()
+        if stop:
+            return True
+        stop = self.right.explode_once()
+        if stop:
+            return True
+        return False
+
+    def split_once(self):
+        if self.value is not None and self.value >= 10:# raw number >= 10
+            self.split()
+            print(f'after split: {root}')
+            return True
+
+        if self.right is not None and self.left is not None:
+            stop = self.left.split_once()
+            if stop:
+                return True
+            stop = self.right.split_once()
+            if stop:
+                return True
+        return False
+
+    def reduce_once(self):
+        global root
+        # print(f'reducing {self} (val: {self.value}, left: {self.left}, right: {self.right})')
+        stop = root.explode_once()
+        if stop:
+            return True
+        stop = root.split_once()
+        if stop:
+            return True
+>>>>>>> 98f572a... Add day 18 part 1
         return False
 
     def magnitude(self):
